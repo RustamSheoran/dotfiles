@@ -2,9 +2,25 @@
 # Interactive, resilient Omarchy post-install debloat & dotfiles setup script.
 # Asks before each section, skips non-existent items silently, and continues on errors.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || pwd)"
 FAILURES=()
 AUTO_YES=false
+
+# If piped via `curl -fsSL <url> | bash`, clone the repo and re-exec from disk
+if [[ ! -d "$SCRIPT_DIR/.config" ]]; then
+  echo "[*] Bootstrapping dotfiles repository..."
+  if ! command -v git >/dev/null 2>&1; then
+    sudo pacman -S --noconfirm --needed git || exit 1
+  fi
+  REPO_DIR="$HOME/github/dotfiles"
+  if [[ -d "$REPO_DIR/.git" ]]; then
+    git -C "$REPO_DIR" pull --ff-only || true
+  else
+    mkdir -p "$(dirname "$REPO_DIR")"
+    git clone https://github.com/RustamSheoran/dotfiles.git "$REPO_DIR" || exit 1
+  fi
+  exec bash "$REPO_DIR/setup-omarchy.sh" </dev/tty
+fi
 
 log()  { printf '\033[1;34m[*]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[!]\033[0m %s\n' "$*" >&2; }
@@ -16,7 +32,7 @@ ask() {
     return 0
   fi
   local reply
-  read -r -p "[?] $prompt [y/N/yyy=all]: " reply
+  read -r -p "[?] $prompt [y/N/yyy=all]: " reply </dev/tty
   if [[ "$reply" == "yyy" ]]; then
     AUTO_YES=true
     return 0
