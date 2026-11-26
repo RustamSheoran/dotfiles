@@ -30,10 +30,12 @@ unit_exists_system() {
 
 log "Starting Omarchy debloat & setup..."
 
-# 0. Remove Omarchy preinstalled bloat if not already removed
+# 0. Ask to remove Omarchy preinstalled bloat if not already removed
 if [[ ! -f "$HOME/.local/state/omarchy/preinstalls-removed" ]] && command -v omarchy-remove-preinstalls >/dev/null 2>&1; then
-  log "Removing Omarchy preinstalled apps/webapps/TUIs..."
-  run_step "Remove Omarchy preinstalls" omarchy-remove-preinstalls
+  read -r -p "[?] Do you want to remove Omarchy preinstalled apps/webapps? [y/N]: " ans_pre
+  if [[ "$ans_pre" =~ ^[Yy]$ ]]; then
+    run_step "Remove Omarchy preinstalls" omarchy-remove-preinstalls
+  fi
 fi
 
 # 1. Remove unused packages (only those actually installed)
