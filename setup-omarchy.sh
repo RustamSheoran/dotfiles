@@ -178,7 +178,12 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
-# 9. Reload Hyprland & Omarchy shell if running
+# 9. Disable default Omarchy plugins & reload Hyprland / Omarchy shell
+if command -v omarchy >/dev/null 2>&1; then
+  for plugin in omarchy.agents omarchy.elsewhen omarchy.weather omarchy.dropbox omarchy.tailscale; do
+    omarchy plugin disable "$plugin" >/dev/null 2>&1 || true
+  done
+fi
 if command -v hyprctl >/dev/null 2>&1 && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   run_step "Reload Hyprland" hyprctl reload
 fi
