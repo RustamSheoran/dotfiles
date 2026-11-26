@@ -1,0 +1,14 @@
+[Unit]
+Description=Clean user app caches every 2 days with low I/O priority
+After=default.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/rustam/.local/bin/omarchy-cache-clean
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=75%
+IOWeight=50
+
+[Install]
+WantedBy=default.target
