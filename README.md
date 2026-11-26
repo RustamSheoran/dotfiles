@@ -43,7 +43,6 @@ bash ~/.config/nvim/setup.sh
    - **Pacman auto-clean hook** (`/etc/pacman.d/hooks/paccache.hook`): clears `.pkg.tar.zst` cache after every transaction (`paccache -rk0; paccache -ruk0`)
    - **Journald cap** (`/etc/systemd/journald.conf.d/size.conf`): limits logs to `100M`
    - **BFQ I/O scheduler** (`/etc/udev/rules.d/60-ioscheduler.rules`): keeps the desktop responsive during large file transfers
-   - **2-day cache cleaner** (`cache-clean.service` + `~/.local/bin/omarchy-cache-clean`): cleans `~/.cache/{pip,zen,chromium,yay,spotify,tracker3,mise}` every 2 days at idle I/O priority
 5. **Deploys Dotfiles:**
    - `.config/hypr/{bindings,looknfeel,input}.lua` (fast animations, `0.92/0.87` terminal opacity, hardware `kb_options = ""`, on-demand `mpd` + `rmpc` in `foot`, restored Tmux/Calculator/Spotify/YouTube bindings)
    - `.config/omarchy/shell.json` (trimmed bar layout)

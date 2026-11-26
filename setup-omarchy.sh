@@ -158,8 +158,8 @@ if ask "Configure Pacman auto-clean hook (keep 0), journald 100M cap, and BFQ I/
   run_step "Configure BFQ udev rule" sudo bash -c 'printf "ACTION==\"add|change\", KERNEL==\"sd[a-z]\", ATTR{queue/scheduler}=\"bfq\"\n" > /etc/udev/rules.d/60-ioscheduler.rules'
 fi
 
-# 5. Deploy dotfiles & 2-day cache cleaner
-if ask "Copy dotfiles into $HOME and enable the 2-day ~/.cache cleaner?"; then
+# 5. Deploy dotfiles
+if ask "Copy dotfiles into $HOME?"; then
   DOTFILES=(
     ".config/hypr/bindings.lua"
     ".config/hypr/looknfeel.lua"
@@ -167,8 +167,6 @@ if ask "Copy dotfiles into $HOME and enable the 2-day ~/.cache cleaner?"; then
     ".config/omarchy/shell.json"
     ".config/omarchy/shell.toml"
     ".config/foot/foot.ini"
-    ".config/systemd/user/cache-clean.service"
-    ".local/bin/omarchy-cache-clean"
     ".bashrc"
     ".clang-format"
   )
@@ -180,17 +178,6 @@ if ask "Copy dotfiles into $HOME and enable the 2-day ~/.cache cleaner?"; then
       run_step "Copy $rel" cp "$src" "$dst"
     fi
   done
-  if [[ -f "$HOME/.local/bin/omarchy-cache-clean" ]]; then
-    chmod +x "$HOME/.local/bin/omarchy-cache-clean" 2>/dev/null || true
-  fi
-
-  if [[ -f "$HOME/.config/systemd/user/cache-clean.service" ]]; then
-    mkdir -p "$HOME/.local/state"
-    if [[ ! -f "$HOME/.local/state/cache-clean-next" ]]; then
-      date -d '+2 days' +%s > "$HOME/.local/state/cache-clean-next" 2>/dev/null || true
-    fi
-    run_step "Enable cache-clean.service" bash -c 'systemctl --user daemon-reload && systemctl --user enable cache-clean.service'
-  fi
 
   if [[ -d "$SCRIPT_DIR/.config/omarchy/themes/green-anime" ]]; then
     if ask "Restore and apply the green-anime theme + wallpaper?"; then
