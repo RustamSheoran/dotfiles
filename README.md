@@ -48,7 +48,6 @@ bash ~/.config/nvim/setup.sh
    - `.config/hypr/{bindings,looknfeel,input}.lua` (fast animations, `0.92/0.87` terminal opacity, hardware `kb_options = ""`, on-demand `mpd` + `rmpc` in `foot`, restored Tmux/Calculator/Spotify/YouTube bindings)
    - `.config/omarchy/shell.json` (trimmed bar layout)
    - `.config/foot/foot.ini` (`Ctrl+Shift+C/V` + `Ctrl/Shift+Insert` copy/paste)
-   - `.config/mpv/mpv.conf` (`hwdec=auto-safe`, `profile=fast`, `framedrop=vo`)
    - `.bashrc` & `.clang-format`
 
 ---

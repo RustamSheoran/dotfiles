@@ -167,7 +167,6 @@ if ask "Copy dotfiles into $HOME and enable the 2-day ~/.cache cleaner?"; then
     ".config/omarchy/shell.json"
     ".config/omarchy/shell.toml"
     ".config/foot/foot.ini"
-    ".config/mpv/mpv.conf"
     ".config/systemd/user/cache-clean.service"
     ".local/bin/omarchy-cache-clean"
     ".bashrc"

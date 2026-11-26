@@ -7,7 +7,6 @@ Type=oneshot
 ExecStart=/home/rustam/.local/bin/omarchy-cache-clean
 Nice=19
 IOSchedulingClass=idle
-CPUQuota=75%
 IOWeight=50
 
 [Install]
