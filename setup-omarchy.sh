@@ -30,6 +30,12 @@ unit_exists_system() {
 
 log "Starting Omarchy debloat & setup..."
 
+# 0. Remove Omarchy preinstalled bloat if not already removed
+if [[ ! -f "$HOME/.local/state/omarchy/preinstalls-removed" ]] && command -v omarchy-remove-preinstalls >/dev/null 2>&1; then
+  log "Removing Omarchy preinstalled apps/webapps/TUIs..."
+  run_step "Remove Omarchy preinstalls" omarchy-remove-preinstalls
+fi
+
 # 1. Remove unused packages (only those actually installed)
 BLOAT_PKGS=(
   signal-desktop typora serein-bin
@@ -49,7 +55,7 @@ if (( ${#TO_REMOVE[@]} > 0 )); then
 fi
 
 # 2. Install essential packages (only those missing)
-ESSENTIAL_PKGS=(foot rmpc mpd mpd-mpris pacman-contrib mold clang gcc)
+ESSENTIAL_PKGS=(foot rmpc mpd mpd-mpris omacalc pacman-contrib mold clang gcc)
 TO_INSTALL=()
 for pkg in "${ESSENTIAL_PKGS[@]}"; do
   if ! pacman -Qq "$pkg" >/dev/null 2>&1; then
