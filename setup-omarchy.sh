@@ -1,12 +1,28 @@
 #!/usr/bin/env bash
-# Resilient Omarchy post-install debloat & dotfiles setup script.
-# Continues on errors, skips non-existent items silently, and reports any real failures.
+# Interactive, resilient Omarchy post-install debloat & dotfiles setup script.
+# Asks before each section, skips non-existent items silently, and continues on errors.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FAILURES=()
+AUTO_YES=false
 
 log()  { printf '\033[1;34m[*]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[!]\033[0m %s\n' "$*" >&2; }
+
+ask() {
+  local prompt="$1"
+  if [[ "$AUTO_YES" == true ]]; then
+    log "Auto-yes: $prompt"
+    return 0
+  fi
+  local reply
+  read -r -p "[?] $prompt [y/N/yyy=all]: " reply
+  if [[ "$reply" == "yyy" ]]; then
+    AUTO_YES=true
+    return 0
+  fi
+  [[ "$reply" =~ ^[Yy]$ ]]
+}
 
 run_step() {
   local desc="$1"
@@ -30,10 +46,9 @@ unit_exists_system() {
 
 log "Starting Omarchy debloat & setup..."
 
-# 0. Ask to remove Omarchy preinstalled bloat if not already removed
+# 0. Omarchy preinstalled apps/webapps
 if [[ ! -f "$HOME/.local/state/omarchy/preinstalls-removed" ]] && command -v omarchy-remove-preinstalls >/dev/null 2>&1; then
-  read -r -p "[?] Do you want to remove Omarchy preinstalled apps/webapps? [y/N]: " ans_pre
-  if [[ "$ans_pre" =~ ^[Yy]$ ]]; then
+  if ask "Remove Omarchy preinstalled apps/webapps (omarchy-remove-preinstalls)?"; then
     run_step "Remove Omarchy preinstalls" omarchy-remove-preinstalls
   fi
 fi
@@ -51,132 +66,154 @@ for pkg in "${BLOAT_PKGS[@]}"; do
     TO_REMOVE+=("$pkg")
   fi
 done
-if (( ${#TO_REMOVE[@]} > 0 )); then
-  log "Removing unused packages: ${TO_REMOVE[*]}"
+if (( ${#TO_REMOVE[@]} > 0 )) && ask "Remove unused packages (${TO_REMOVE[*]})?"; then
   run_step "Remove bloat packages" sudo pacman -Rns --noconfirm "${TO_REMOVE[@]}"
 fi
 
 # 2. Install essential packages (only those missing)
-ESSENTIAL_PKGS=(foot rmpc mpd mpd-mpris omacalc pacman-contrib mold clang gcc)
+ESSENTIAL_PKGS=(foot rmpc mpd mpd-mpris omacalc aether pacman-contrib mold clang gcc)
 TO_INSTALL=()
 for pkg in "${ESSENTIAL_PKGS[@]}"; do
   if ! pacman -Qq "$pkg" >/dev/null 2>&1; then
     TO_INSTALL+=("$pkg")
   fi
 done
-if (( ${#TO_INSTALL[@]} > 0 )); then
-  log "Installing essential packages: ${TO_INSTALL[*]}"
+if (( ${#TO_INSTALL[@]} > 0 )) && ask "Install essential packages (${TO_INSTALL[*]})?"; then
   run_step "Install pacman essentials" sudo pacman -S --noconfirm --needed "${TO_INSTALL[@]}"
 fi
 
 if ! pacman -Qq zen-browser-bin >/dev/null 2>&1 && command -v yay >/dev/null 2>&1; then
-  log "Installing zen-browser-bin via yay..."
-  run_step "Install zen-browser-bin" yay -S --noconfirm --needed zen-browser-bin
-fi
-
-# 3. Disable unwanted user services (only if present)
-USER_DISABLE=(bt-agent.service voxtype.service mpd.service mpd-mpris.service owed.service)
-for unit in "${USER_DISABLE[@]}"; do
-  if unit_exists_user "$unit"; then
-    log "Disabling user unit: $unit"
-    run_step "Disable user unit $unit" systemctl --user disable --now "$unit"
+  if ask "Install Zen Browser (zen-browser-bin via yay)?"; then
+    run_step "Install zen-browser-bin" yay -S --noconfirm --needed zen-browser-bin
   fi
-done
-
-# Disable localsearch-3 (GNOME file indexer)
-if unit_exists_user "localsearch-3.service"; then
-  log "Stopping & masking localsearch-3.service..."
-  systemctl --user stop localsearch-3.service 2>/dev/null || true
-  run_step "Mask localsearch-3.service" systemctl --user mask localsearch-3.service
 fi
-mkdir -p "$HOME/.config/autostart"
-run_step "Hide localsearch-3 autostart" bash -c 'cat > "$HOME/.config/autostart/localsearch-3.desktop" <<EOF
+
+if [[ -f /usr/share/applications/zen.desktop ]] && command -v xdg-settings >/dev/null 2>&1; then
+  if ask "Set Zen as your default web browser?"; then
+    run_step "Set Zen as default browser" xdg-settings set default-web-browser zen.desktop
+  fi
+fi
+
+# 3. Disable unwanted services & enable SSD TRIM
+if ask "Disable background bloat services (bluetooth, avahi, voxtype, owed, localsearch-3, mpd autostart, crash-capture) and enable SSD TRIM?"; then
+  USER_DISABLE=(bt-agent.service voxtype.service mpd.service mpd-mpris.service owed.service)
+  for unit in "${USER_DISABLE[@]}"; do
+    if unit_exists_user "$unit"; then
+      run_step "Disable user unit $unit" systemctl --user disable --now "$unit"
+    fi
+  done
+
+  if unit_exists_user "localsearch-3.service"; then
+    systemctl --user stop localsearch-3.service 2>/dev/null || true
+    run_step "Mask localsearch-3.service" systemctl --user mask localsearch-3.service
+  fi
+  mkdir -p "$HOME/.config/autostart"
+  run_step "Hide localsearch-3 autostart" bash -c 'cat > "$HOME/.config/autostart/localsearch-3.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=LocalSearch
 Hidden=true
 EOF'
 
-# Disable Omarchy crash watcher if active
-if command -v omarchy >/dev/null 2>&1 && [[ ! -f "$HOME/.local/state/omarchy/toggles/crash-capture-off" ]]; then
-  log "Turning off omarchy crash-capture..."
-  run_step "Toggle crash-capture off" omarchy toggle crash-capture
-fi
-
-# 4. Disable unwanted system services & enable SSD TRIM
-SYS_DISABLE=(bluetooth.service avahi-daemon.service avahi-daemon.socket docker.socket)
-for unit in "${SYS_DISABLE[@]}"; do
-  if unit_exists_system "$unit"; then
-    log "Disabling system unit: $unit"
-    run_step "Disable system unit $unit" sudo systemctl disable --now "$unit"
+  if command -v omarchy >/dev/null 2>&1 && [[ ! -f "$HOME/.local/state/omarchy/toggles/crash-capture-off" ]]; then
+    run_step "Toggle crash-capture off" omarchy toggle crash-capture
   fi
-done
 
-if unit_exists_system "fstrim.timer"; then
-  log "Enabling weekly SSD TRIM (fstrim.timer)..."
-  run_step "Enable fstrim.timer" sudo systemctl enable --now fstrim.timer
-fi
+  SYS_DISABLE=(bluetooth.service avahi-daemon.service avahi-daemon.socket docker.socket)
+  for unit in "${SYS_DISABLE[@]}"; do
+    if unit_exists_system "$unit"; then
+      run_step "Disable system unit $unit" sudo systemctl disable --now "$unit"
+    fi
+  done
 
-# 5. Pacman auto-clean hook, journald 100M cap, and BFQ I/O scheduler
-if command -v paccache >/dev/null 2>&1; then
-  log "Configuring pacman post-transaction cache cleanup hook..."
-  run_step "Create paccache hook" sudo bash -c 'mkdir -p /etc/pacman.d/hooks && printf "[Trigger]\nOperation = Upgrade\nOperation = Install\nOperation = Remove\nType = Package\nTarget = *\n\n[Action]\nDescription = Cleaning pacman cache\nWhen = PostTransaction\nExec = /bin/sh -c \"/usr/bin/paccache -rk0; /usr/bin/paccache -ruk0\"\n" > /etc/pacman.d/hooks/paccache.hook'
-fi
-
-log "Capping systemd journal at 100M..."
-run_step "Configure journald 100M cap" sudo bash -c 'mkdir -p /etc/systemd/journald.conf.d && printf "[Journal]\nSystemMaxUse=100M\n" > /etc/systemd/journald.conf.d/size.conf && journalctl --vacuum-size=100M && systemctl restart systemd-journald'
-
-log "Setting BFQ I/O scheduler for sd* drives..."
-run_step "Configure BFQ udev rule" sudo bash -c 'printf "ACTION==\"add|change\", KERNEL==\"sd[a-z]\", ATTR{queue/scheduler}=\"bfq\"\n" > /etc/udev/rules.d/60-ioscheduler.rules'
-
-# 6. Deploy dotfiles from this repository
-log "Copying dotfiles into $HOME..."
-DOTFILES=(
-  ".config/hypr/bindings.lua"
-  ".config/hypr/looknfeel.lua"
-  ".config/hypr/input.lua"
-  ".config/omarchy/shell.json"
-  ".config/foot/foot.ini"
-  ".config/mpv/mpv.conf"
-  ".config/systemd/user/cache-clean.service"
-  ".local/bin/omarchy-cache-clean"
-  ".bashrc"
-  ".clang-format"
-)
-for rel in "${DOTFILES[@]}"; do
-  src="$SCRIPT_DIR/$rel"
-  dst="$HOME/$rel"
-  if [[ -f "$src" ]]; then
-    mkdir -p "$(dirname "$dst")"
-    run_step "Copy $rel" cp "$src" "$dst"
+  if unit_exists_system "fstrim.timer"; then
+    run_step "Enable fstrim.timer" sudo systemctl enable --now fstrim.timer
   fi
-done
-if [[ -f "$HOME/.local/bin/omarchy-cache-clean" ]]; then
-  chmod +x "$HOME/.local/bin/omarchy-cache-clean" 2>/dev/null || true
 fi
 
-# Enable 2-day cache-clean user service
-if [[ -f "$HOME/.config/systemd/user/cache-clean.service" ]]; then
-  mkdir -p "$HOME/.local/state"
-  if [[ ! -f "$HOME/.local/state/cache-clean-next" ]]; then
-    date -d '+2 days' +%s > "$HOME/.local/state/cache-clean-next" 2>/dev/null || true
+# 4. Pacman auto-clean hook, journald 100M cap, and BFQ I/O scheduler
+if ask "Configure Pacman auto-clean hook (keep 0), journald 100M cap, and BFQ I/O scheduler?"; then
+  if command -v paccache >/dev/null 2>&1; then
+    run_step "Create paccache hook" sudo bash -c 'mkdir -p /etc/pacman.d/hooks && printf "[Trigger]\nOperation = Upgrade\nOperation = Install\nOperation = Remove\nType = Package\nTarget = *\n\n[Action]\nDescription = Cleaning pacman cache\nWhen = PostTransaction\nExec = /bin/sh -c \"/usr/bin/paccache -rk0; /usr/bin/paccache -ruk0\"\n" > /etc/pacman.d/hooks/paccache.hook'
   fi
-  run_step "Enable cache-clean.service" bash -c 'systemctl --user daemon-reload && systemctl --user enable cache-clean.service'
+
+  run_step "Configure journald 100M cap" sudo bash -c 'mkdir -p /etc/systemd/journald.conf.d && printf "[Journal]\nSystemMaxUse=100M\n" > /etc/systemd/journald.conf.d/size.conf && journalctl --vacuum-size=100M && systemctl restart systemd-journald'
+
+  run_step "Configure BFQ udev rule" sudo bash -c 'printf "ACTION==\"add|change\", KERNEL==\"sd[a-z]\", ATTR{queue/scheduler}=\"bfq\"\n" > /etc/udev/rules.d/60-ioscheduler.rules'
 fi
 
-# 7. Ask to generate SSH key for GitHub only if none exists
+# 5. Deploy dotfiles & 2-day cache cleaner
+if ask "Copy dotfiles into $HOME and enable the 2-day ~/.cache cleaner?"; then
+  DOTFILES=(
+    ".config/hypr/bindings.lua"
+    ".config/hypr/looknfeel.lua"
+    ".config/hypr/input.lua"
+    ".config/omarchy/shell.json"
+    ".config/omarchy/shell.toml"
+    ".config/foot/foot.ini"
+    ".config/mpv/mpv.conf"
+    ".config/systemd/user/cache-clean.service"
+    ".local/bin/omarchy-cache-clean"
+    ".bashrc"
+    ".clang-format"
+  )
+  for rel in "${DOTFILES[@]}"; do
+    src="$SCRIPT_DIR/$rel"
+    dst="$HOME/$rel"
+    if [[ -f "$src" ]]; then
+      mkdir -p "$(dirname "$dst")"
+      run_step "Copy $rel" cp "$src" "$dst"
+    fi
+  done
+  if [[ -f "$HOME/.local/bin/omarchy-cache-clean" ]]; then
+    chmod +x "$HOME/.local/bin/omarchy-cache-clean" 2>/dev/null || true
+  fi
+
+  if [[ -f "$HOME/.config/systemd/user/cache-clean.service" ]]; then
+    mkdir -p "$HOME/.local/state"
+    if [[ ! -f "$HOME/.local/state/cache-clean-next" ]]; then
+      date -d '+2 days' +%s > "$HOME/.local/state/cache-clean-next" 2>/dev/null || true
+    fi
+    run_step "Enable cache-clean.service" bash -c 'systemctl --user daemon-reload && systemctl --user enable cache-clean.service'
+  fi
+
+  if [[ -d "$SCRIPT_DIR/.config/omarchy/themes/green-anime" ]]; then
+    if ask "Restore and apply the green-anime theme + wallpaper?"; then
+      mkdir -p "$HOME/.config/omarchy/themes"
+      run_step "Copy green-anime theme" cp -r "$SCRIPT_DIR/.config/omarchy/themes/green-anime" "$HOME/.config/omarchy/themes/"
+      if command -v omarchy >/dev/null 2>&1; then
+        run_step "Apply green-anime theme" omarchy theme set green-anime
+        if [[ -f "$HOME/.config/omarchy/themes/green-anime/backgrounds/wallhaven-po5mlj.jpg" ]]; then
+          omarchy-theme-bg-set "$HOME/.config/omarchy/themes/green-anime/backgrounds/wallhaven-po5mlj.jpg" >/dev/null 2>&1 || true
+        fi
+      fi
+    fi
+  fi
+
+  if command -v omarchy >/dev/null 2>&1; then
+    for plugin in omarchy.agents omarchy.elsewhen omarchy.weather omarchy.dropbox omarchy.tailscale; do
+      omarchy plugin disable "$plugin" >/dev/null 2>&1 || true
+    done
+  fi
+  if command -v hyprctl >/dev/null 2>&1 && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    run_step "Reload Hyprland" hyprctl reload
+  fi
+  if command -v omarchy-shell >/dev/null 2>&1; then
+    omarchy-shell shell reloadConfig >/dev/null 2>&1 || true
+  fi
+fi
+
+# 6. Ask to generate SSH key for GitHub only if none exists
 if [[ ! -f "$HOME/.ssh/id_ed25519" && ! -f "$HOME/.ssh/id_rsa" ]] && command -v ssh-keygen >/dev/null 2>&1; then
-  read -r -p "[?] No SSH key found. Do you want to generate one for GitHub? [y/N]: " ans_ssh
-  if [[ "$ans_ssh" =~ ^[Yy]$ ]]; then
+  if ask "No SSH key found. Generate one for GitHub?"; then
     mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
     run_step "Generate SSH key" ssh-keygen -t ed25519 -C "${USER:-user}@$(hostname)" -f "$HOME/.ssh/id_ed25519"
   fi
 fi
 
-# 8. Ask to set up LazyVim (specialized for Competitive Programming)
+# 7. Ask to set up LazyVim (specialized for Competitive Programming)
 if command -v git >/dev/null 2>&1; then
-  read -r -p "[?] Do you want to install my LazyVim config (specialized for Competitive Programming)? [y/N]: " ans_nvim
-  if [[ "$ans_nvim" =~ ^[Yy]$ ]]; then
+  if ask "Install my LazyVim config (specialized for Competitive Programming)?"; then
     if [[ -d "$HOME/.config/nvim" ]]; then
       mv "$HOME/.config/nvim" "$HOME/.config/nvim.bak.$(date +%s)" 2>/dev/null || true
     fi
@@ -184,19 +221,6 @@ if command -v git >/dev/null 2>&1; then
       run_step "Run nvim/setup.sh" bash "$HOME/.config/nvim/setup.sh"
     fi
   fi
-fi
-
-# 9. Disable default Omarchy plugins & reload Hyprland / Omarchy shell
-if command -v omarchy >/dev/null 2>&1; then
-  for plugin in omarchy.agents omarchy.elsewhen omarchy.weather omarchy.dropbox omarchy.tailscale; do
-    omarchy plugin disable "$plugin" >/dev/null 2>&1 || true
-  done
-fi
-if command -v hyprctl >/dev/null 2>&1 && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-  run_step "Reload Hyprland" hyprctl reload
-fi
-if command -v omarchy-shell >/dev/null 2>&1; then
-  omarchy-shell shell reloadConfig >/dev/null 2>&1 || true
 fi
 
 echo ""
@@ -218,9 +242,7 @@ if [[ -f "$HOME/.ssh/id_ed25519.pub" ]]; then
   echo "  2. Test GitHub SSH:"
   echo "       ssh -T git@github.com"
 fi
-echo "  3. Clone your Neovim CP IDE (if not installed yet):"
-echo "       git clone git@github.com:RustamSheoran/nvim.git ~/.config/nvim && bash ~/.config/nvim/setup.sh"
-echo "  4. Reload bash config (or open a new terminal):"
+echo "  3. Reload bash config (or open a new terminal):"
 echo "       source ~/.bashrc"
 
 (( ${#FAILURES[@]} == 0 )) || exit 1
