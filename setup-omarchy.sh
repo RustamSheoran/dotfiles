@@ -156,7 +156,14 @@ if [[ -f "$HOME/.config/systemd/user/cache-clean.service" ]]; then
   run_step "Enable cache-clean.service" bash -c 'systemctl --user daemon-reload && systemctl --user enable cache-clean.service'
 fi
 
-# 7. Reload Hyprland & Omarchy shell if running
+# 7. Generate SSH key for GitHub if missing
+if [[ ! -f "$HOME/.ssh/id_ed25519" && ! -f "$HOME/.ssh/id_rsa" ]] && command -v ssh-keygen >/dev/null 2>&1; then
+  log "No SSH key found. Generating ~/.ssh/id_ed25519..."
+  mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+  run_step "Generate SSH key" ssh-keygen -t ed25519 -C "${USER:-user}@$(hostname)" -f "$HOME/.ssh/id_ed25519"
+fi
+
+# 8. Reload Hyprland & Omarchy shell if running
 if command -v hyprctl >/dev/null 2>&1 && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   run_step "Reload Hyprland" hyprctl reload
 fi
@@ -172,5 +179,20 @@ else
   for f in "${FAILURES[@]}"; do
     printf '  - %s\n' "$f" >&2
   done
-  exit 1
 fi
+
+echo ""
+log "Next steps:"
+if [[ -f "$HOME/.ssh/id_ed25519.pub" ]]; then
+  echo "  1. View or copy your SSH public key and add it at https://github.com/settings/keys:"
+  echo "       cat ~/.ssh/id_ed25519.pub"
+  echo "       wl-copy < ~/.ssh/id_ed25519.pub"
+  echo "  2. Test GitHub SSH:"
+  echo "       ssh -T git@github.com"
+fi
+echo "  3. Clone your Neovim CP IDE (if not installed yet):"
+echo "       git clone git@github.com:RustamSheoran/nvim.git ~/.config/nvim && bash ~/.config/nvim/setup.sh"
+echo "  4. Reload bash config (or open a new terminal):"
+echo "       source ~/.bashrc"
+
+(( ${#FAILURES[@]} == 0 )) || exit 1
