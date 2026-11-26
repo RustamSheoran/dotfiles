@@ -156,14 +156,29 @@ if [[ -f "$HOME/.config/systemd/user/cache-clean.service" ]]; then
   run_step "Enable cache-clean.service" bash -c 'systemctl --user daemon-reload && systemctl --user enable cache-clean.service'
 fi
 
-# 7. Generate SSH key for GitHub if missing
+# 7. Ask to generate SSH key for GitHub only if none exists
 if [[ ! -f "$HOME/.ssh/id_ed25519" && ! -f "$HOME/.ssh/id_rsa" ]] && command -v ssh-keygen >/dev/null 2>&1; then
-  log "No SSH key found. Generating ~/.ssh/id_ed25519..."
-  mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
-  run_step "Generate SSH key" ssh-keygen -t ed25519 -C "${USER:-user}@$(hostname)" -f "$HOME/.ssh/id_ed25519"
+  read -r -p "[?] No SSH key found. Do you want to generate one for GitHub? [y/N]: " ans_ssh
+  if [[ "$ans_ssh" =~ ^[Yy]$ ]]; then
+    mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+    run_step "Generate SSH key" ssh-keygen -t ed25519 -C "${USER:-user}@$(hostname)" -f "$HOME/.ssh/id_ed25519"
+  fi
 fi
 
-# 8. Reload Hyprland & Omarchy shell if running
+# 8. Ask to set up LazyVim (specialized for Competitive Programming)
+if command -v git >/dev/null 2>&1; then
+  read -r -p "[?] Do you want to install my LazyVim config (specialized for Competitive Programming)? [y/N]: " ans_nvim
+  if [[ "$ans_nvim" =~ ^[Yy]$ ]]; then
+    if [[ -d "$HOME/.config/nvim" ]]; then
+      mv "$HOME/.config/nvim" "$HOME/.config/nvim.bak.$(date +%s)" 2>/dev/null || true
+    fi
+    if run_step "Clone RustamSheoran/nvim" git clone https://github.com/RustamSheoran/nvim.git "$HOME/.config/nvim"; then
+      run_step "Run nvim/setup.sh" bash "$HOME/.config/nvim/setup.sh"
+    fi
+  fi
+fi
+
+# 9. Reload Hyprland & Omarchy shell if running
 if command -v hyprctl >/dev/null 2>&1 && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   run_step "Reload Hyprland" hyprctl reload
 fi
