@@ -25,25 +25,12 @@ hl.config({
 -- })
 
 -- https://wiki.hypr.land/Configuring/Basics/Variables/#animations
-hl.config({
-  animations = {
-    enabled = true,
-  },
-})
-
--- Fast, snappy animations (~100-150ms)
-hl.animation({ leaf = "global", enabled = true, speed = 2, bezier = "default" })
-hl.animation({ leaf = "windows", enabled = true, speed = 1.5, bezier = "easeOutQuint" })
-hl.animation({ leaf = "windowsIn", enabled = true, speed = 1.5, bezier = "easeOutQuint", style = "popin 87%" })
-hl.animation({ leaf = "windowsOut", enabled = true, speed = 1.0, bezier = "linear", style = "popin 87%" })
-hl.animation({ leaf = "fadeIn", enabled = true, speed = 1.0, bezier = "almostLinear" })
-hl.animation({ leaf = "fadeOut", enabled = true, speed = 1.0, bezier = "almostLinear" })
-hl.animation({ leaf = "fade", enabled = true, speed = 1.5, bezier = "quick" })
-hl.animation({ leaf = "layers", enabled = true, speed = 1.5, bezier = "easeOutQuint" })
-hl.animation({ leaf = "layersIn", enabled = true, speed = 1.5, bezier = "easeOutQuint", style = "fade" })
-hl.animation({ leaf = "layersOut", enabled = true, speed = 1.0, bezier = "linear", style = "fade" })
-hl.animation({ leaf = "fadeLayersIn", enabled = true, speed = 1.0, bezier = "almostLinear" })
-hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1.0, bezier = "almostLinear" })
+-- hl.config({
+--   animations = {
+--     -- Disable all animations.
+--     enabled = false,
+--   },
+-- })
 
 -- https://wiki.hypr.land/Configuring/Basics/Variables/#layout
 -- hl.config({
